@@ -1,0 +1,85 @@
+pipeline{
+    agent any
+
+    environment {
+        SERVER_IP = '192.168.0.84'
+        SERVER_USER = 'kiran'
+        DEPLOY_DIR = '/var/www/kiran'
+    }
+    stages {
+            stage('Checkout') {
+                steps {
+                    checkout scm
+                }
+            }
+
+            stage('Check Files') {
+                steps {
+                    sh '''
+                        echo "Checking website files..."
+                        test -f index.html
+                    '''
+                }
+            }
+
+            stage('Deploy Website') {
+                steps {
+                    sh '''
+                        scp index.html ${SERVER_USER}@${SERVER_IP}:/tmp/index.html
+                        ssh ${SERVER_USER}@${SERVER_IP} \
+                            "sudo cp /tmp/index.html ${DEPLOY_DIR}/index.html"
+                    '''
+                }
+            }
+
+            stage('Nginx Configuration') {
+                steps {
+                    sh '''
+                        set -e
+
+                        echo "Checking Nginx configuration..."
+
+                        if ssh ${SERVER_USER}@${SERVER_IP} \
+                            'sudo -n test -f /etc/nginx/sites-available/kiran'; then
+
+                            echo "Nginx configuration already exists. Skipping creation."
+
+                        else
+                            echo "Creating Nginx configuration..."
+
+                            ssh ${SERVER_USER}@${SERVER_IP} \
+                                'sudo -n tee /etc/nginx/sites-available/kiran > /dev/null' <<'NGINX'
+            server {
+                listen 80;
+                server_name _;
+
+                root /var/www/kiran;
+                index index.html;
+            }
+            NGINX
+                        fi
+
+                        echo "Enabling Nginx site..."
+
+                        ssh ${SERVER_USER}@${SERVER_IP} '
+                            set -e
+
+                            if [ ! -L /etc/nginx/sites-enabled/kiran ]; then
+                                sudo -n ln -s \
+                                    /etc/nginx/sites-available/kiran \
+                                    /etc/nginx/sites-enabled/kiran
+                            fi
+
+                            echo "Testing Nginx configuration..."
+                            sudo -n nginx -t
+
+                            echo "Reloading Nginx..."
+                            sudo -n systemctl reload nginx
+                        '
+
+                        echo "Nginx configuration stage completed."
+                    '''
+                }
+            }
+        }
+    }
