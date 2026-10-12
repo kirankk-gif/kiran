@@ -4,7 +4,7 @@ pipeline {
     environment {
         SERVER_IP   = '192.168.0.84'
         SSH_PORT    = '2222'
-        DEPLOY_DIR  = '/var/www/kiran'
+        DEPLOY_DIR  = '/var/www/html'
         NGINX_PORT  = '8083'
     }
 
@@ -51,7 +51,7 @@ pipeline {
                         ssh -i "$SSH_KEY" \
                             -p "$SSH_PORT" \
                             "${SSH_USER}@${SERVER_IP}" \
-                            "mv /tmp/index.html ${DEPLOY_DIR}/index.html"
+                            "cp /tmp/index.html ${DEPLOY_DIR}/index.html"
 
                         echo "Website file deployed successfully."
                     '''
@@ -84,9 +84,6 @@ server {
     root ${DEPLOY_DIR};
     index index.html;
 
-    location / {
-        try_files \\$uri \\$uri/ =404;
-    }
 }
 NGINX
 
