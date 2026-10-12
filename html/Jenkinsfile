@@ -1,87 +1,90 @@
-pipeline{
+
+pipeline {
     agent any
 
     environment {
-        SERVER_IP = '192.168.0.84'
+        SERVER_IP   = '192.168.0.84'
         SERVER_USER = 'kiran'
-        DEPLOY_DIR = '/var/www/kiran'
+        SSH_PORT    = '2222'
+        DEPLOY_DIR  = '/var/www/kiran'
+        SSH_KEY     = '/home/kiran.kk@TA.COM/.ssh/id_private_key'
     }
+
     stages {
-            stage('Checkout') {
-                steps {
-                    checkout scm
-                }
+        stage('Checkout') {
+            steps {
+                checkout scm
             }
+        }
 
-            stage('Check Files') {
-                steps {
-                    sh '''
-                        echo "Checking website files..."
-                        test -f html/index.html
-                    '''
-                }
+        stage('Check Files') {
+            steps {
+                sh '''
+                    set -e
+                    echo "Checking website files..."
+                    test -f html/index.html
+                    echo "index.html found."
+                '''
             }
+        }
 
-            stage('Deploy Website') {
-                steps {
-                    sh '''
-                        scp -P 2222 html/index.html \
-                            ${SERVER_USER}@${SERVER_IP}:/tmp/index.html
+        stage('Deploy Website') {
+            steps {
+                sh '''
+                    set -e
 
-                        ssh -p 2222 ${SERVER_USER}@${SERVER_IP} \
-                            "sudo cp /tmp/index.html ${DEPLOY_DIR}/index.html"
-                    '''
-                }
+                    scp -i "$SSH_KEY" -P "$SSH_PORT" \
+                        html/index.html \
+                        "${SERVER_USER}@${SERVER_IP}:/tmp/index.html"
+
+                    ssh -i "$SSH_KEY" -p "$SSH_PORT" \
+                        "${SERVER_USER}@${SERVER_IP}" \
+                        "sudo -n install -m 644 /tmp/index.html ${DEPLOY_DIR}/index.html"
+                '''
             }
+        }
 
-            stage('Nginx Configuration') {
-                steps {
-                    sh '''
-                        set -e
+        stage('Nginx Configuration') {
+            steps {
+                sh '''
+                    set -e
 
-                        echo "Checking Nginx configuration..."
+                    ssh -i "$SSH_KEY" -p "$SSH_PORT" \
+                        "${SERVER_USER}@${SERVER_IP}" \
+                        'sudo -n tee /etc/nginx/sites-available/kiran > /dev/null' <<'NGINX'
+server {
+    listen 8083;
+    server_name _;
 
-                        if ssh lab \
-                            'sudo -n test -f /etc/nginx/sites-available/kiran'; then
+    root /var/www/kiran;
+    index index.html;
+}
+NGINX
 
-                            echo "Nginx configuration already exists. Skipping creation."
-
-                        else
-                            echo "Creating Nginx configuration..."
-
-                            ssh lab \
-                                'sudo -n tee /etc/nginx/sites-available/kiran > /dev/null' <<'NGINX'
-            server {
-                listen 80;
-                server_name _;
-
-                root /var/www/kiran;
-                index index.html;
+                    ssh -i "$SSH_KEY" -p "$SSH_PORT" \
+                        "${SERVER_USER}@${SERVER_IP}" \
+                        'set -e
+                         if [ ! -L /etc/nginx/sites-enabled/kiran ]; then
+                             sudo -n ln -s /etc/nginx/sites-available/kiran /etc/nginx/sites-enabled/kiran
+                         fi
+                         sudo -n nginx -t
+                         if systemctl is-active --quiet nginx; then
+                             sudo -n systemctl reload nginx
+                         else
+                             sudo -n systemctl start nginx
+                         fi'
+                '''
             }
-            NGINX
-                        fi
+        }
 
-                        echo "Enabling Nginx site..."
-
-                        ssh lab '
-                            set -e
-
-                            if [ ! -L /etc/nginx/sites-enabled/kiran ]; then
-                                sudo -n ln -s \
-                                    /etc/nginx/sites-available/kiran \
-                                    /etc/nginx/sites-enabled/kiran
-                            fi
-
-                            echo "Testing Nginx configuration..."
-                            sudo -n nginx -t
-
-                            echo "Reloading Nginx..."
-                            sudo -n systemctl reload nginx
-                        '
-
-                        echo "Nginx configuration stage completed."
-                    '''
-                }
+        stage('Verify Deployment') {
+            steps {
+                sh '''
+                    set -e
+                    curl --fail --show-error \
+                        "http://${SERVER_IP}:8083/"
+                '''
             }
         }
     }
+}
