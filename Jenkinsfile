@@ -51,8 +51,7 @@ pipeline {
                         ssh -i "$SSH_KEY" \
                             -p "$SSH_PORT" \
                             "${SSH_USER}@${SERVER_IP}" \
-                            "sudo -n install -d -m 755 ${DEPLOY_DIR} &&
-                             sudo -n install -m 644 /tmp/index.html ${DEPLOY_DIR}/index.html"
+                            "mv /tmp/index.html ${DEPLOY_DIR}/index.html"
 
                         echo "Website file deployed successfully."
                     '''
