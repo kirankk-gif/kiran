@@ -17,7 +17,7 @@ pipeline{
                 steps {
                     sh '''
                         echo "Checking website files..."
-                        test -f /var/www/kiran/index.html
+                        test -f html/index.html
                     '''
                 }
             }
@@ -25,7 +25,7 @@ pipeline{
             stage('Deploy Website') {
                 steps {
                     sh '''
-                        scp /var/www/kiran/index.html ${SERVER_USER}@${SERVER_IP}:/tmp/index.html
+                        scp html/index.html ${SERVER_USER}@${SERVER_IP}:/tmp/index.html
                         ssh ${SERVER_USER}@${SERVER_IP} \
                             "sudo cp /tmp/index.html ${DEPLOY_DIR}/index.html"
                     '''
