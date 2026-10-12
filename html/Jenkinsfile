@@ -25,8 +25,8 @@ pipeline{
             stage('Deploy Website') {
                 steps {
                     sh '''
-                        scp html/index.html ${SERVER_USER}@${SERVER_IP}:/tmp/index.html
-                        ssh ${SERVER_USER}@${SERVER_IP} \
+                        scp html/index.html lab:/tmp/index.html
+                        ssh lab \
                             "sudo cp /tmp/index.html ${DEPLOY_DIR}/index.html"
                     '''
                 }
@@ -39,7 +39,7 @@ pipeline{
 
                         echo "Checking Nginx configuration..."
 
-                        if ssh ${SERVER_USER}@${SERVER_IP} \
+                        if ssh lab \
                             'sudo -n test -f /etc/nginx/sites-available/kiran'; then
 
                             echo "Nginx configuration already exists. Skipping creation."
@@ -47,7 +47,7 @@ pipeline{
                         else
                             echo "Creating Nginx configuration..."
 
-                            ssh ${SERVER_USER}@${SERVER_IP} \
+                            ssh lab \
                                 'sudo -n tee /etc/nginx/sites-available/kiran > /dev/null' <<'NGINX'
             server {
                 listen 80;
@@ -61,7 +61,7 @@ pipeline{
 
                         echo "Enabling Nginx site..."
 
-                        ssh ${SERVER_USER}@${SERVER_IP} '
+                        ssh lab '
                             set -e
 
                             if [ ! -L /etc/nginx/sites-enabled/kiran ]; then
